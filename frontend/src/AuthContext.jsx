@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { apiFetch, getToken } from "./api";
+import { apiFetch, consumeAuthHash, getToken } from "./api";
 
 const AuthContext = createContext(null);
 
@@ -26,6 +26,7 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
+    consumeAuthHash();
     refresh();
   }, []);
 

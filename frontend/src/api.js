@@ -5,6 +5,20 @@ const REFRESH_KEY = "micromanus_refresh";
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token) => localStorage.setItem(TOKEN_KEY, token);
 export const setRefreshToken = (token) => localStorage.setItem(REFRESH_KEY, token);
+export function consumeAuthHash() {
+  const hash = window.location.hash || "";
+  if (!hash.startsWith("#token=")) return false;
+  const params = new URLSearchParams(hash.slice(1));
+  const token = params.get("token");
+  if (!token) return false;
+
+  setToken(token);
+  const refreshToken = params.get("refresh");
+  if (refreshToken) setRefreshToken(refreshToken);
+  // Remove sensitive tokens from the address bar/history entry.
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  return true;
+}
 export const clearToken = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_KEY);

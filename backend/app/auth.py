@@ -129,5 +129,5 @@ async def callback(provider: str, request: Request, db: Session = Depends(get_db
 
     user = _upsert_user(db, email=email, name=name, avatar_url=avatar_url, provider=provider)
     return RedirectResponse(
-        f"{settings.frontend_url}/auth/callback#token={create_access_token(user.id)}&refresh={create_refresh_token(user.id)}"
+        f"{settings.frontend_url}/#token={create_access_token(user.id)}&refresh={create_refresh_token(user.id)}"
     )
