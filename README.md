@@ -9,7 +9,7 @@ Ask it a question and it runs a **think → search → read → think again** lo
 | | |
 |---|---|
 | Backend API | https://micromanus.fastapicloud.dev (FastAPI on fastapicloud) |
-| Frontend | _deployed on Vercel — add the production URL here_ |
+| Frontend | _deployed on Vercel — https://micro-manus-six.vercel.app |
 | API docs (Swagger) | https://micromanus.fastapicloud.dev/docs |
 
 ## What it does (assignment requirements)
