@@ -100,8 +100,19 @@ def message_pdf(thread_id: str, message_id: str, user: User = Depends(get_curren
     except Exception as exc:  # noqa: BLE001 - a failed render must return through CORS middleware, not a bare 500
         raise HTTPException(500, f"PDF generation failed: {exc}")
 
+    try:
+        payload = pdf.output()
+        if isinstance(payload, str):
+            payload = payload.encode("latin-1")
+        elif isinstance(payload, bytearray):
+            payload = bytes(payload)
+        elif not isinstance(payload, bytes):
+            payload = bytes(payload)
+    except Exception as exc:  # noqa: BLE001 - normalize serializer errors into a clear API response
+        raise HTTPException(500, f"PDF serialization failed: {exc}")
+
     return Response(
-        bytes(pdf.output()),
+        payload,
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="micromanus-report.pdf"'},
     )
