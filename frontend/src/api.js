@@ -43,19 +43,24 @@ async function tryRefresh() {
   return true;
 }
 
-export async function apiFetch(path, options = {}, retried = false) {
+async function authFetch(path, options = {}, retried = false) {
   const token = getToken();
   const headers = { ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (options.body && !(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  if (res.status === 401) {
-    if (!retried && (await tryRefresh())) return apiFetch(path, options, true);
-    clearToken();
-    window.location.href = "/login";
-    throw new Error("Unauthorized");
-  }
+  if (res.status !== 401) return res;
+  if (!retried && (await tryRefresh())) return authFetch(path, options, true);
+  clearToken();
+  window.location.href = "/login";
+  throw new Error("Unauthorized");
+}
+
+export async function apiFetch(path, options = {}, retried = false) {
+  const headers = { ...(options.headers || {}) };
+  if (options.body && !(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
+
+  const res = await authFetch(path, { ...options, headers }, retried);
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
     const err = new Error(body.detail || "Request failed");
@@ -76,9 +81,7 @@ export function apiStream(path, body) {
 }
 
 export async function downloadPdf(threadId, messageId) {
-  const res = await fetch(`${API_URL}/threads/${threadId}/messages/${messageId}/pdf`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
+  const res = await authFetch(`/threads/${threadId}/messages/${messageId}/pdf`);
   if (!res.ok) throw new Error("PDF export failed");
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement("a");
