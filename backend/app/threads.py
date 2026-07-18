@@ -69,21 +69,88 @@ def _pdf_text(s: str) -> str:
     return re.sub(r"(\S{60})(?=\S)", r"\1 ", s)  # break long tokens (URLs); fpdf raises on words wider than the page
 
 
-@router.get("/{thread_id}/messages/{message_id}/pdf")
-def message_pdf(thread_id: str, message_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    thread = _thread_or_404(db, thread_id, user)
-    msg = db.get(Message, message_id)
-    if msg is None or msg.thread_id != thread.id:
-        raise HTTPException(404, "Message not found")
+def _pdf_escape(s: str) -> str:
+    return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.add_page()
-    pdf.set_text_color(0, 0, 0)  # always plain black-on-white, regardless of app theme
-    pdf.set_font("helvetica", "", 11)
+
+def _fallback_pdf(lines: list[str]) -> bytes:
+    page_width = 595.28
+    page_height = 841.89
+    margin = 72
+    line_height = 14
+    max_chars = 92
+    pages: list[list[str]] = [[]]
+    y = page_height - margin
+
+    def add_line(text: str) -> None:
+        nonlocal y
+        if y < margin:
+            pages.append([])
+            y = page_height - margin
+        pages[-1].append(f"BT /F1 11 Tf 72 {y:.2f} Td ({_pdf_escape(text)}) Tj ET")
+        y -= line_height
+
+    for raw in lines:
+        text = raw.strip()
+        if not text:
+            y -= line_height // 2
+            continue
+        if m := re.match(r"^(#{1,4})\s+(.*)", text):
+            text = m.group(2).upper()
+        elif re.match(r"^[-*]\s+", text):
+            text = "- " + re.sub(r"^[-*]\s+", "", text)
+        for chunk in re.findall(rf".{{1,{max_chars}}}(?:\s+|$)|.{{1,{max_chars}}}", _pdf_text(text)):
+            add_line(chunk.rstrip())
+
+    objects: list[bytes] = []
+    objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+
+    page_count = len(pages)
+    kids = " ".join(f"{3 + i * 2} 0 R" for i in range(page_count))
+    objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {page_count} >>".encode("latin-1"))
+
+    for index, page_lines in enumerate(pages):
+        content = ("\n".join(page_lines) or "BT /F1 11 Tf 72 770 Td () Tj ET").encode("latin-1")
+        page_obj = 3 + index * 2
+        stream_obj = page_obj + 1
+        objects.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width:.2f} {page_height:.2f}] "
+            f"/Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> "
+            f"/Contents {stream_obj} 0 R >>".encode("latin-1")
+        )
+        objects.append(f"<< /Length {len(content)} >>\nstream\n".encode("latin-1") + content + b"\nendstream")
+
+    out = [b"%PDF-1.4\n"]
+    offsets = [0]
+    for i, obj in enumerate(objects, start=1):
+        offsets.append(sum(len(part) for part in out))
+        out.append(f"{i} 0 obj\n".encode("latin-1"))
+        out.append(obj)
+        out.append(b"\nendobj\n")
+    xref = sum(len(part) for part in out)
+    out.append(f"xref\n0 {len(objects) + 1}\n".encode("latin-1"))
+    out.append(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        out.append(f"{offset:010d} 00000 n \n".encode("latin-1"))
+    out.append(
+        (
+            "trailer\n"
+            f"<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+            f"startxref\n{xref}\n%%EOF"
+        ).encode("latin-1")
+    )
+    return b"".join(out)
+
+
+def _render_pdf_message(content: str) -> bytes:
     try:
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=18)
+        pdf.add_page()
+        pdf.set_text_color(0, 0, 0)  # always plain black-on-white, regardless of app theme
+        pdf.set_font("helvetica", "", 11)
         # ponytail: minimal markdown→PDF (headings, bullets, paragraphs); swap in weasyprint if fidelity matters
-        for raw in msg.content.splitlines():
+        for raw in content.splitlines():
             line = re.sub(r"(\*\*|__|`)", "", raw.strip())
             if not line:
                 pdf.ln(3)
@@ -97,19 +164,27 @@ def message_pdf(thread_id: str, message_id: str, user: User = Depends(get_curren
                 pdf.multi_cell(0, 6, _pdf_text("- " + re.sub(r"^[-*]\s+", "", line)))
             else:
                 pdf.multi_cell(0, 6, _pdf_text(line))
-    except Exception as exc:  # noqa: BLE001 - a failed render must return through CORS middleware, not a bare 500
-        raise HTTPException(500, f"PDF generation failed: {exc}")
 
-    try:
         payload = pdf.output()
         if isinstance(payload, str):
-            payload = payload.encode("latin-1")
-        elif isinstance(payload, bytearray):
-            payload = bytes(payload)
-        elif not isinstance(payload, bytes):
-            payload = bytes(payload)
-    except Exception as exc:  # noqa: BLE001 - normalize serializer errors into a clear API response
-        raise HTTPException(500, f"PDF serialization failed: {exc}")
+            return payload.encode("latin-1")
+        if isinstance(payload, bytearray):
+            return bytes(payload)
+        if isinstance(payload, bytes):
+            return payload
+        return bytes(payload)
+    except Exception:
+        return _fallback_pdf(content.splitlines())
+
+
+@router.get("/{thread_id}/messages/{message_id}/pdf")
+def message_pdf(thread_id: str, message_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    thread = _thread_or_404(db, thread_id, user)
+    msg = db.get(Message, message_id)
+    if msg is None or msg.thread_id != thread.id:
+        raise HTTPException(404, "Message not found")
+
+    payload = _render_pdf_message(msg.content)
 
     return Response(
         payload,

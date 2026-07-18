@@ -67,3 +67,22 @@ def test_pdf_export_handles_long_urls_and_unicode(client, user, thread, db_sessi
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/pdf"
     assert res.content.startswith(b"%PDF")
+
+
+def test_pdf_export_falls_back_when_fpdf_fails(client, user, thread, db_session, monkeypatch):
+    from app.models import Message
+    import app.threads as threads_mod
+
+    msg = Message(thread_id=thread.id, role="assistant", content="# Report\n\nFallback should still work.")
+    db_session.add(msg)
+    db_session.commit()
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(threads_mod.FPDF, "output", boom)
+
+    res = client.get(f"/threads/{thread.id}/messages/{msg.id}/pdf")
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "application/pdf"
+    assert res.content.startswith(b"%PDF")
