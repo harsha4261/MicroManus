@@ -66,6 +66,96 @@ h2 {
   text-align: center;
 }
 
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(900px 420px at -10% -10%, rgba(217, 164, 65, 0.18), transparent 70%),
+    radial-gradient(900px 420px at 110% 110%, rgba(74, 106, 191, 0.2), transparent 68%),
+    linear-gradient(165deg, #12151c 0%, #141a25 48%, #11161f 100%);
+}
+
+.login-card {
+  margin: 0 auto;
+  width: min(92vw, 460px);
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(5px);
+}
+
+.login-glow {
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  filter: blur(52px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.login-glow-left {
+  left: -120px;
+  top: 40px;
+  background: rgba(217, 164, 65, 0.4);
+}
+
+.login-glow-right {
+  right: -120px;
+  bottom: 30px;
+  background: rgba(83, 121, 219, 0.33);
+}
+
+.login-profile {
+  margin: 22px auto 0;
+  width: min(92vw, 460px);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.login-profile-name {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.login-profile-links {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.login-profile-links a {
+  color: var(--brass);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.login-profile-links a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-card {
+    padding: 30px 24px;
+  }
+
+  .login-profile {
+    margin-top: 18px;
+  }
+}
+
 .stack {
   display: flex;
   flex-direction: column;
