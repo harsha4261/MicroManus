@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { setRefreshToken, setToken } from "../api";
+import { consumeAuthHash } from "../api";
 import { useAuth } from "../AuthContext";
 
 export default function AuthCallback() {
@@ -8,15 +8,10 @@ export default function AuthCallback() {
   const { refresh } = useAuth();
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.slice(1));
-    const token = params.get("token");
-    if (!token) {
+    if (!consumeAuthHash()) {
       navigate("/login", { replace: true });
       return;
     }
-    setToken(token);
-    const refreshToken = params.get("refresh");
-    if (refreshToken) setRefreshToken(refreshToken);
     refresh().then(() => navigate("/", { replace: true }));
   }, []);
 
